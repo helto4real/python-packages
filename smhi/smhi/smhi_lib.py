@@ -13,6 +13,7 @@ class SmhiForecast():
     """
     Class to hold forecast data
     """
+    # pylint: disable=R0913
     def __init__(
             self, temperature: int, humidity: int, pressure: int,
             thunder: int, cloudiness: int, symbol: int) -> None:
@@ -138,7 +139,7 @@ class Smhi():
                     thunder = int(param['values'][0])   #Percent
                 elif param['name'] == 'tcc_mean':
                     octa = int(param['values'][0])       #Cloudiness in octas
-                    if 0 <= octa >= 8: # Between 0 -> 8
+                    if 0 <= octa <= 8: # Between 0 -> 8
                         cloudiness = round(100*octa/8) # Convert octas to percent
                     else:
                         cloudiness = 100 #If not determined use 100%
