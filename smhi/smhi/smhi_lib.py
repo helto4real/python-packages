@@ -1,45 +1,51 @@
+"""
+Module smhi_lib contains the code to get forecasts from
+the Swedish weather institute (SMHI) through the open
+API:s
+"""
 from typing import List
 import abc
 import json
 from urllib.request import urlopen
 
-"""
-Class to hold forecast data
-"""
+
 class SmhiForecast():
-    """Constructor"""
+    """
+    Class to hold forecast data
+    """
     def __init__(
-        self, temperature: int, humidity: int, pressure: int,
-        thunder: int, cloudiness: int, symbol: int) -> None:
-            self._temperature = temperature,
-            self._humidity = humidity,
-            self._pressure = pressure,
-            self._thunder = thunder,
-            self._cloudiness = cloudiness,
-            self._symbol = symbol
-       
+            self, temperature: int, humidity: int, pressure: int,
+            thunder: int, cloudiness: int, symbol: int) -> None:
+        """Constructor"""
+        self._temperature = temperature,
+        self._humidity = humidity,
+        self._pressure = pressure,
+        self._thunder = thunder,
+        self._cloudiness = cloudiness,
+        self._symbol = symbol
+
     @property
-    def temperature(self) -> int: 
+    def temperature(self) -> int:
         """Air temperature (Celcius)"""
         return self._temperature
     @property
-    def humidity(self) -> int: 
+    def humidity(self) -> int:
         """Air humidity (Percent)"""
         return self._humidity
     @property
-    def pressure(self) -> int: 
+    def pressure(self) -> int:
         """Air pressure (hPa)"""
         return self._pressure
     @property
-    def thunder(self) -> int: 
+    def thunder(self) -> int:
         """Chance of thunder (Percent)"""
         return self._thunder
     @property
-    def cloudiness(self) -> int: 
+    def cloudiness(self) -> int:
         """Cloudiness (Percent)"""
         return self._cloudiness
     @property
-    def symbol(self) -> int: 
+    def symbol(self) -> int:
         """Symbol (Percent)
             1	Clear sky
             2	Nearly clear sky
@@ -70,48 +76,49 @@ class SmhiForecast():
             27	Heavy snowfall"""
         return self._symbol
 
-"""
-Baseclass to use as dependecy incjection pattern for easier automatic testing
-"""
-class SmhiAPIBase(object): 
+# pylint: disable=R0903
+class SmhiAPIBase():
+    """
+    Baseclass to use as dependecy incjection pattern for easier automatic testing
+    """
     @abc.abstractmethod
     def get_forecast(self, longitude: str, latitude: str) -> {}:
+        """Override this"""
         raise NotImplementedError('users must define get_forecast to use this base class')
 
-"""
-Default implementation for SMHI api
-"""
-class ShmiAPI(SmhiAPIBase): 
+# pylint: disable=R0903
+class ShmiAPI(SmhiAPIBase):
+    """Default implementation for SMHI api"""
     def get_forecast(self, longitude: str, latitude: str) -> {}:
-        api_url = "https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/geotype/point/lon/{}/lat/{}/data.json".format(
-            longitude, latitude)
+        api_url = "https://opendata-download-metfcst.smhi.se/api/category"\
+                  "/pmp3g/version/2/geotype/point/lon/{}/lat/{}/data.json"\
+                  .format(longitude, latitude)
 
         response = urlopen(api_url)
         data = response.read().decode('utf-8')
-        jsonData = json.loads(data)
+        json_data = json.loads(data)
 
-        return jsonData
+        return json_data
 
 """
 Class that use the Swedish Weather Institute (SMHI) weather forecast 
 open API to return the current forecast data
 """
-class Smhi(): 
-    def __init__(self, longitude: str, latitude: str, api: SmhiAPIBase = ShmiAPI()) -> None: 
+class Smhi():
+    def __init__(self, longitude: str, latitude: str, api: SmhiAPIBase = ShmiAPI()) -> None:
         self._longitude = longitude
         self._latitude = latitude
         self._api = api
 
-    def get_forecast(self) -> List[SmhiForecast]: 
+    def get_forecast(self) -> List[SmhiForecast]:
         """Returns a list of forecasts. The first in list are the current one"""
         jsonData = self._api.get_forecast(self._longitude, self._latitude)
-        
-        forecasts:List[SmhiForecast] = []
-        
+
+        forecasts: List[SmhiForecast] = []
+
         # Get the parameters
         for forecast in jsonData['timeSeries']:
-            # Some default values 
-            temperature = 0; pressure = 0; humidity = 0 
+            temperature = 0; pressure = 0; humidity = 0
             thunder = 0; symbol = 0; cloudiness = 0
 
             for param in forecast['parameters']:
@@ -131,6 +138,6 @@ class Smhi():
                         cloudiness = 100 #If not determined use 100%
                 elif param['name'] == 'Wsymb2':
                     symbol = int(param['values'][0]) #category
-            forecasts.append(SmhiForecast(temperature, humidity, pressure, thunder, cloudiness, symbol))
+            forecasts.append(
+                SmhiForecast(temperature, humidity, pressure, thunder, cloudiness, symbol))
         return forecasts
-
