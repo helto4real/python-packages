@@ -17,11 +17,12 @@ class SmhiForecast():
             self, temperature: int, humidity: int, pressure: int,
             thunder: int, cloudiness: int, symbol: int) -> None:
         """Constructor"""
-        self._temperature = temperature,
-        self._humidity = humidity,
-        self._pressure = pressure,
-        self._thunder = thunder,
-        self._cloudiness = cloudiness,
+
+        self._temperature = temperature
+        self._humidity = humidity
+        self._pressure = pressure
+        self._thunder = thunder
+        self._cloudiness = cloudiness
         self._symbol = symbol
 
     @property
@@ -100,11 +101,12 @@ class ShmiAPI(SmhiAPIBase):
 
         return json_data
 
-"""
-Class that use the Swedish Weather Institute (SMHI) weather forecast 
-open API to return the current forecast data
-"""
+
 class Smhi():
+    """
+    Class that use the Swedish Weather Institute (SMHI) weather forecast
+    open API to return the current forecast data
+    """
     def __init__(self, longitude: str, latitude: str, api: SmhiAPIBase = ShmiAPI()) -> None:
         self._longitude = longitude
         self._latitude = latitude
@@ -112,14 +114,18 @@ class Smhi():
 
     def get_forecast(self) -> List[SmhiForecast]:
         """Returns a list of forecasts. The first in list are the current one"""
-        jsonData = self._api.get_forecast(self._longitude, self._latitude)
+        json_data = self._api.get_forecast(self._longitude, self._latitude)
 
         forecasts: List[SmhiForecast] = []
 
         # Get the parameters
-        for forecast in jsonData['timeSeries']:
-            temperature = 0; pressure = 0; humidity = 0
-            thunder = 0; symbol = 0; cloudiness = 0
+        for forecast in json_data['timeSeries']:
+            temperature = 0
+            pressure = 0
+            humidity = 0
+            thunder = 0
+            symbol = 0
+            cloudiness = 0
 
             for param in forecast['parameters']:
                 if param['name'] == 't':
@@ -132,7 +138,7 @@ class Smhi():
                     thunder = int(param['values'][0])   #Percent
                 elif param['name'] == 'tcc_mean':
                     octa = int(param['values'][0])       #Cloudiness in octas
-                    if octa >= 0 and octa <= 8: # Between 0 -> 8
+                    if 0 <= octa >= 8: # Between 0 -> 8
                         cloudiness = round(100*octa/8) # Convert octas to percent
                     else:
                         cloudiness = 100 #If not determined use 100%
