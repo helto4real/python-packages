@@ -7,13 +7,10 @@ from urllib.request import urlopen
 Class to hold forecast data
 """
 class SmhiForecast():
-    def __init__(self, 
-        temperature:int,
-        humidity:int,
-        pressure:int,
-        thunder:int,
-        cloudiness:int,
-        symbol:int) -> None:
+    """Constructor"""
+    def __init__(
+        self, temperature: int, humidity: int, pressure: int,
+        thunder: int, cloudiness: int, symbol: int) -> None:
             self._temperature = temperature,
             self._humidity = humidity,
             self._pressure = pressure,
@@ -22,27 +19,27 @@ class SmhiForecast():
             self._symbol = symbol
        
     @property
-    def temperature(self) -> int:
+    def temperature(self) -> int: 
         """Air temperature (Celcius)"""
         return self._temperature
     @property
-    def humidity(self) -> int:
+    def humidity(self) -> int: 
         """Air humidity (Percent)"""
         return self._humidity
     @property
-    def pressure(self) -> int:
+    def pressure(self) -> int: 
         """Air pressure (hPa)"""
         return self._pressure
     @property
-    def thunder(self) -> int:
+    def thunder(self) -> int: 
         """Chance of thunder (Percent)"""
         return self._thunder
     @property
-    def cloudiness(self) -> int:
+    def cloudiness(self) -> int: 
         """Cloudiness (Percent)"""
         return self._cloudiness
     @property
-    def symbol(self) -> int:
+    def symbol(self) -> int: 
         """Symbol (Percent)
             1	Clear sky
             2	Nearly clear sky
@@ -76,16 +73,16 @@ class SmhiForecast():
 """
 Baseclass to use as dependecy incjection pattern for easier automatic testing
 """
-class SmhiAPIBase(object):
+class SmhiAPIBase(object): 
     @abc.abstractmethod
-    def get_forecast(self, longitude:str, latitude:str) -> {}:
+    def get_forecast(self, longitude: str, latitude: str) -> {}:
         raise NotImplementedError('users must define get_forecast to use this base class')
 
 """
 Default implementation for SMHI api
 """
-class ShmiAPI(SmhiAPIBase):
-    def get_forecast(self, longitude:str, latitude:str) -> {}:
+class ShmiAPI(SmhiAPIBase): 
+    def get_forecast(self, longitude: str, latitude: str) -> {}:
         api_url = "https://opendata-download-metfcst.smhi.se/api/category/pmp3g/version/2/geotype/point/lon/{}/lat/{}/data.json".format(
             longitude, latitude)
 
@@ -99,13 +96,13 @@ class ShmiAPI(SmhiAPIBase):
 Class that use the Swedish Weather Institute (SMHI) weather forecast 
 open API to return the current forecast data
 """
-class Smhi():
-    def __init__(self, longitude:str, latitude:str, api:SmhiAPIBase = ShmiAPI()) -> None:
+class Smhi(): 
+    def __init__(self, longitude: str, latitude: str, api: SmhiAPIBase = ShmiAPI()) -> None: 
         self._longitude = longitude
         self._latitude = latitude
         self._api = api
 
-    def get_forecast(self) -> List[SmhiForecast]:
+    def get_forecast(self) -> List[SmhiForecast]: 
         """Returns a list of forecasts. The first in list are the current one"""
         jsonData = self._api.get_forecast(self._longitude, self._latitude)
         
@@ -118,21 +115,21 @@ class Smhi():
             thunder = 0; symbol = 0; cloudiness = 0
 
             for param in forecast['parameters']:
-                if param['name']=='t':
-                    temperature= int(param['values'][0]) #Celcisus
-                elif param['name']=='r':
-                    humidity= int(param['values'][0]) #Percent
-                elif param['name']=='msl':
+                if param['name'] == 't':
+                    temperature = int(param['values'][0]) #Celcisus
+                elif param['name'] == 'r':
+                    humidity = int(param['values'][0]) #Percent
+                elif param['name'] == 'msl':
                     pressure = int(param['values'][0])  #hPa
-                elif param['name']=='tstm':
-                    thunder = int(param['values'][0])    #Percent
-                elif param['name']=='tcc_mean':
+                elif param['name'] == 'tstm':
+                    thunder = int(param['values'][0])   #Percent
+                elif param['name'] == 'tcc_mean':
                     octa = int(param['values'][0])       #Cloudiness in octas
-                    if octa >=0 and octa <=8: # Between 0 -> 8
+                    if octa >= 0 and octa <= 8: # Between 0 -> 8
                         cloudiness = round(100*octa/8) # Convert octas to percent
                     else:
                         cloudiness = 100 #If not determined use 100%
-                elif param['name']=='Wsymb2':
+                elif param['name'] == 'Wsymb2':
                     symbol = int(param['values'][0]) #category
             forecasts.append(SmhiForecast(temperature, humidity, pressure, thunder, cloudiness, symbol))
         return forecasts
