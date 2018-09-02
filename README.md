@@ -9,3 +9,6 @@ Run ```py.test --cov=smhi.smhi_lib``` and make sure we have no errors
 
 # Pylint
 ```pylint smhi```
+# Upload to pyint
+
+```twine upload dist/*```
