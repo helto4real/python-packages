@@ -5,6 +5,7 @@
 
 from typing import List
 import pytest
+import aiohttp
 from smhi.smhi_lib import Smhi, SmhiForecast, SmhiAPIBase, ShmiAPI
 
 @pytest.fixture
@@ -63,19 +64,26 @@ def test_use_abstract_base_class():
     '''test the not implemented stuff'''
     with pytest.raises(NotImplementedError):
         test = SmhiAPIBase()
-        test.get_forecast('17.00', '62.1')
+        test.get_forecast_api('17.00', '62.1')
 
 def test_smhi_integration_test():
     '''Only test that uses the actual service. Make sure service is up if fails'''
     api = ShmiAPI()
-    forecast = api.get_forecast('17.00', '62.1')
+    forecast = api.get_forecast_api('17.00', '62.1')
     assert forecast is not None
 
 @pytest.mark.asyncio
 async def test_smhi_async_integration_test():
     '''Only test that uses the actual service. Make sure service is up if fails'''
     api = ShmiAPI()
-    forecast = await api.async_get_forecast('17.00', '62.1')
+    forecast = await api.async_get_forecast_api('17.00', '62.1')
+    assert forecast is not None
+
+@pytest.mark.asyncio
+async def test_smhi_async_integration_test_use_session():
+    '''Only test that uses the actual service. Make sure service is up if fails'''
+    api = ShmiAPI()
+    forecast = await api.async_get_forecast_api('17.00', '62.1', aiohttp.ClientSession())
     assert forecast is not None
 
 @pytest.mark.asyncio
@@ -88,11 +96,20 @@ async def test_smhi_async_get_forecast_integration():
     assert forecast is not None
 
 @pytest.mark.asyncio
+async def test_smhi_async_get_forecast_integration_use_session():
+    '''test the async stuff'''
+    smhi_api = smhi()
+    forecast = await smhi_api.async_get_forecast(aiohttp.ClientSession())
+
+    assert forecast[0] is not None
+    assert forecast is not None
+
+@pytest.mark.asyncio
 async def test_async_use_abstract_base_class():
     '''test the not implemented stuff'''
     with pytest.raises(NotImplementedError):
         test = SmhiAPIBase()
-        await test.async_get_forecast('17.00', '62.1')
+        await test.async_get_forecast_api('17.00', '62.1', None)
 
 @pytest.mark.asyncio
 async def test_async_error_from_api():
@@ -109,11 +126,12 @@ async def test_async_error_from_api():
 class FakeSmhiApi(SmhiAPIBase):
     '''Implements fake class to return API data'''
 
-    async def async_get_forecast(self, longitude: str, latitude: str) -> {}:
+    async def async_get_forecast_api(self, longitude: str, latitude: str,
+                                     session: aiohttp.ClientSession = None) -> {}:
         """Real data from the version code works from"""
-        return self.get_forecast(longitude, latitude)
+        return self.get_forecast_api(longitude, latitude)
 
-    def get_forecast(self, longitude: str, latitude: str) -> {}:
+    def get_forecast_api(self, longitude: str, latitude: str) -> {}:
         """Real data from the version code works from"""
         return {
             "approvedTime": "2018-09-01T14:06:18Z",

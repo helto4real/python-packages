@@ -84,22 +84,25 @@ class SmhiAPIBase():
     Baseclass to use as dependecy incjection pattern for easier automatic testing
     """
     @abc.abstractmethod
-    def get_forecast(self, longitude: str, latitude: str) -> {}:
+    def get_forecast_api(self, longitude: str, latitude: str) -> {}:
         """Override this"""
         raise NotImplementedError('users must define get_forecast to use this base class')
 
     @abc.abstractmethod
-    async def async_get_forecast(self, longitude: str, latitude: str) -> {}:
+    async def async_get_forecast_api(self, longitude: str, latitude: str,
+                                     session: aiohttp.ClientSession) -> {}:
         """Override this"""
         raise NotImplementedError('users must define get_forecast to use this base class')
 
 # pylint: disable=R0903
 class ShmiAPI(SmhiAPIBase):
     """Default implementation for SMHI api"""
-    url_template = "https://opendata-download-metfcst.smhi.se/api/category"\
-                   "/pmp3g/version/2/geotype/point/lon/{}/lat/{}/data.json"
 
-    def get_forecast(self, longitude: str, latitude: str) -> {}:
+    def __init__(self):
+        self.url_template = "https://opendata-download-metfcst.smhi.se/api/category"\
+                            "/pmp3g/version/2/geotype/point/lon/{}/lat/{}/data.json"
+
+    def get_forecast_api(self, longitude: str, latitude: str) -> {}:
         """gets data from API"""
         api_url = self.url_template.format(longitude, latitude)
 
@@ -109,15 +112,18 @@ class ShmiAPI(SmhiAPIBase):
 
         return json_data
 
-    async def async_get_forecast(self, longitude: str, latitude: str) -> {}:
+    async def async_get_forecast_api(self, longitude: str, latitude: str,
+                                     session: aiohttp.ClientSession = None) -> {}:
         """gets data from API asyncronious"""
         api_url = self.url_template.format(longitude, latitude)
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(api_url) as response:
-                assert response.status == 200
-                data = await response.text()
-                return json.loads(data)
+        if session is None:
+            session = aiohttp.ClientSession()
+
+        async with session.get(api_url) as response:
+            assert response.status == 200
+            data = await response.text()
+            return json.loads(data)
 
 class Smhi():
     """
@@ -125,18 +131,18 @@ class Smhi():
     open API to return the current forecast data
     """
     def __init__(self, longitude: str, latitude: str, api: SmhiAPIBase = ShmiAPI()) -> None:
-        self._longitude = longitude
-        self._latitude = latitude
-        self._api = api
+        self._longitude: str = longitude
+        self._latitude: str = latitude
+        self._api: SmhiAPIBase = api
 
     def get_forecast(self) -> List[SmhiForecast]:
         """Returns a list of forecasts. The first in list are the current one"""
-        json_data = self._api.get_forecast(self._longitude, self._latitude)
+        json_data = self._api.get_forecast_api(self._longitude, self._latitude)
         return _get_forecast(json_data)
 
-    async def async_get_forecast(self) -> List[SmhiForecast]:
+    async def async_get_forecast(self, session: aiohttp.ClientSession = None) -> List[SmhiForecast]:
         """Returns a list of forecasts. The first in list are the current one"""
-        json_data = await self._api.async_get_forecast(self._longitude, self._latitude)
+        json_data = await self._api.async_get_forecast_api(self._longitude, self._latitude, session)
         return _get_forecast(json_data)
 
 
