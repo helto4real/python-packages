@@ -71,9 +71,50 @@ def test_smhi_integration_test():
     forecast = api.get_forecast('17.00', '62.1')
     assert forecast is not None
 
+@pytest.mark.asyncio
+async def test_smhi_async_integration_test():
+    '''Only test that uses the actual service. Make sure service is up if fails'''
+    api = ShmiAPI()
+    forecast = await api.async_get_forecast('17.00', '62.1')
+    assert forecast is not None
+
+@pytest.mark.asyncio
+async def test_smhi_async_get_forecast_integration():
+    '''test the async stuff'''
+    smhi_api = smhi()
+    forecast = await smhi_api.async_get_forecast()
+
+    assert forecast[0] is not None
+    assert forecast is not None
+
+@pytest.mark.asyncio
+async def test_async_use_abstract_base_class():
+    '''test the not implemented stuff'''
+    with pytest.raises(NotImplementedError):
+        test = SmhiAPIBase()
+        await test.async_get_forecast('17.00', '62.1')
+
+@pytest.mark.asyncio
+async def test_async_error_from_api():
+    '''test the async stuff'''
+    api = ShmiAPI()
+    #Faulty template
+    api.url_template = "https://opendata-download-metfcst.smhi.se/api/category"\
+                       "/pmp3g/version/2/geotype/point/lon/{}/lat/{}/dataa.json"
+
+    smhi_error = Smhi('17.00', '62.1', api)
+    with pytest.raises(AssertionError):
+        await smhi_error.async_get_forecast()
+
 class FakeSmhiApi(SmhiAPIBase):
-    """Real data from the version code works from"""
+    '''Implements fake class to return API data'''
+
+    async def async_get_forecast(self, longitude: str, latitude: str) -> {}:
+        """Real data from the version code works from"""
+        return self.get_forecast(longitude, latitude)
+
     def get_forecast(self, longitude: str, latitude: str) -> {}:
+        """Real data from the version code works from"""
         return {
             "approvedTime": "2018-09-01T14:06:18Z",
             "referenceTime": "2018-09-01T14:00:00Z",

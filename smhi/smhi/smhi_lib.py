@@ -7,7 +7,7 @@ from typing import List
 import abc
 import json
 from urllib.request import urlopen
-
+import aiohttp
 
 class SmhiForecast():
     """
@@ -88,13 +88,20 @@ class SmhiAPIBase():
         """Override this"""
         raise NotImplementedError('users must define get_forecast to use this base class')
 
+    @abc.abstractmethod
+    async def async_get_forecast(self, longitude: str, latitude: str) -> {}:
+        """Override this"""
+        raise NotImplementedError('users must define get_forecast to use this base class')
+
 # pylint: disable=R0903
 class ShmiAPI(SmhiAPIBase):
     """Default implementation for SMHI api"""
+    url_template = "https://opendata-download-metfcst.smhi.se/api/category"\
+                   "/pmp3g/version/2/geotype/point/lon/{}/lat/{}/data.json"
+
     def get_forecast(self, longitude: str, latitude: str) -> {}:
-        api_url = "https://opendata-download-metfcst.smhi.se/api/category"\
-                  "/pmp3g/version/2/geotype/point/lon/{}/lat/{}/data.json"\
-                  .format(longitude, latitude)
+        """gets data from API"""
+        api_url = self.url_template.format(longitude, latitude)
 
         response = urlopen(api_url)
         data = response.read().decode('utf-8')
@@ -102,6 +109,15 @@ class ShmiAPI(SmhiAPIBase):
 
         return json_data
 
+    async def async_get_forecast(self, longitude: str, latitude: str) -> {}:
+        """gets data from API asyncronious"""
+        api_url = self.url_template.format(longitude, latitude)
+
+        async with aiohttp.ClientSession() as session:
+            async with session.get(api_url) as response:
+                assert response.status == 200
+                data = await response.text()
+                return json.loads(data)
 
 class Smhi():
     """
@@ -116,35 +132,44 @@ class Smhi():
     def get_forecast(self) -> List[SmhiForecast]:
         """Returns a list of forecasts. The first in list are the current one"""
         json_data = self._api.get_forecast(self._longitude, self._latitude)
+        return _get_forecast(json_data)
 
-        forecasts: List[SmhiForecast] = []
+    async def async_get_forecast(self) -> List[SmhiForecast]:
+        """Returns a list of forecasts. The first in list are the current one"""
+        json_data = await self._api.async_get_forecast(self._longitude, self._latitude)
+        return _get_forecast(json_data)
 
-        # Get the parameters
-        for forecast in json_data['timeSeries']:
-            temperature = 0
-            pressure = 0
-            humidity = 0
-            thunder = 0
-            symbol = 0
-            cloudiness = 0
 
-            for param in forecast['parameters']:
-                if param['name'] == 't':
-                    temperature = int(param['values'][0]) #Celcisus
-                elif param['name'] == 'r':
-                    humidity = int(param['values'][0]) #Percent
-                elif param['name'] == 'msl':
-                    pressure = int(param['values'][0])  #hPa
-                elif param['name'] == 'tstm':
-                    thunder = int(param['values'][0])   #Percent
-                elif param['name'] == 'tcc_mean':
-                    octa = int(param['values'][0])       #Cloudiness in octas
-                    if 0 <= octa <= 8: # Between 0 -> 8
-                        cloudiness = round(100*octa/8) # Convert octas to percent
-                    else:
-                        cloudiness = 100 #If not determined use 100%
-                elif param['name'] == 'Wsymb2':
-                    symbol = int(param['values'][0]) #category
-            forecasts.append(
-                SmhiForecast(temperature, humidity, pressure, thunder, cloudiness, symbol))
-        return forecasts
+def _get_forecast(api_result: dict) -> List[SmhiForecast]:
+    """Converts results fråm API to SmhiForeCast list"""
+    forecasts: List[SmhiForecast] = []
+
+    # Get the parameters
+    for forecast in api_result['timeSeries']:
+        temperature = 0
+        pressure = 0
+        humidity = 0
+        thunder = 0
+        symbol = 0
+        cloudiness = 0
+
+        for param in forecast['parameters']:
+            if param['name'] == 't':
+                temperature = int(param['values'][0]) #Celcisus
+            elif param['name'] == 'r':
+                humidity = int(param['values'][0]) #Percent
+            elif param['name'] == 'msl':
+                pressure = int(param['values'][0])  #hPa
+            elif param['name'] == 'tstm':
+                thunder = int(param['values'][0])   #Percent
+            elif param['name'] == 'tcc_mean':
+                octa = int(param['values'][0])       #Cloudiness in octas
+                if 0 <= octa <= 8: # Between 0 -> 8
+                    cloudiness = round(100*octa/8) # Convert octas to percent
+                else:
+                    cloudiness = 100 #If not determined use 100%
+            elif param['name'] == 'Wsymb2':
+                symbol = int(param['values'][0]) #category
+        forecasts.append(
+            SmhiForecast(temperature, humidity, pressure, thunder, cloudiness, symbol))
+    return forecasts
