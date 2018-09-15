@@ -6,7 +6,7 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="smhi_pkg",
-    version="0.0.4",
+    version="0.0.5",
     author="helto4real",
     author_email="info@joysoftware.org",
     description="Gets the weather forecast data from Swedish weather institute",
@@ -18,6 +18,6 @@ setuptools.setup(
         "Programming Language :: Python :: 3",
         "License :: OSI Approved :: MIT License",
         "Operating System :: OS Independent",
-        "Development Status :: 2 - Pre-Alpha",
+        "Development Status :: 4 - Beta",
     ],
 )

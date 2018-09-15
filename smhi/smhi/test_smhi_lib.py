@@ -52,6 +52,34 @@ def test_cloudiness(first_smhi_forecast):
     '''test'''
     assert first_smhi_forecast.cloudiness == 50
 
+def test_precipitation(first_smhi_forecast):
+    '''test'''
+    assert first_smhi_forecast.precipitation == 1
+
+def test_mean_precipitation(first_smhi_forecast):
+    '''test'''
+    assert first_smhi_forecast.mean_precipitation == 2.0
+
+def test_median_precipitation(first_smhi_forecast):
+    '''test'''
+    assert first_smhi_forecast.median_precipitation == 1.0
+
+def test_wind_speed(first_smhi_forecast):
+    '''test'''
+    assert first_smhi_forecast.wind_speed == 1.9
+
+def test_wind_direction(first_smhi_forecast):
+    '''test'''
+    assert first_smhi_forecast.wind_direction == 134
+
+def test_wind_gust(first_smhi_forecast):
+    '''test'''
+    assert first_smhi_forecast.wind_gust == 4.7
+
+def test_horizontal_visibility(first_smhi_forecast):
+    '''test'''
+    assert first_smhi_forecast.horizontal_visibility == 50
+
 def test_symbol(first_smhi_forecast):
     '''test'''
     assert first_smhi_forecast.symbol == 1
@@ -164,7 +192,7 @@ class FakeSmhiApi(SmhiAPIBase):
                             "level": 0,
                             "unit": "category",
                             "values": [
-                                0
+                                1
                             ]
                         },
                         {
@@ -182,7 +210,7 @@ class FakeSmhiApi(SmhiAPIBase):
                             "level": 0,
                             "unit": "kg/m2/h",
                             "values": [
-                                0
+                                2
                             ]
                         },
                         {
@@ -200,7 +228,7 @@ class FakeSmhiApi(SmhiAPIBase):
                             "level": 0,
                             "unit": "kg/m2/h",
                             "values": [
-                                0
+                                1
                             ]
                         },
                         {

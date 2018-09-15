@@ -13,39 +13,92 @@ class SmhiForecast():
     """
     Class to hold forecast data
     """
-    # pylint: disable=R0913
+    # pylint: disable=R0913, R0902
     def __init__(
             self, temperature: int, humidity: int, pressure: int,
-            thunder: int, cloudiness: int, symbol: int) -> None:
+            thunder: int, cloudiness: int, precipitation: int,
+            wind_direction: int, wind_speed: float,
+            horizontal_visibility: float, wind_gust: float,
+            mean_precipitation: float, median_precipitation: float,
+            symbol: int) -> None:
         """Constructor"""
-
         self._temperature = temperature
         self._humidity = humidity
         self._pressure = pressure
         self._thunder = thunder
         self._cloudiness = cloudiness
+        self._precipitation = precipitation
+        self._mean_precipitation = mean_precipitation
+        self._median_precipitation = median_precipitation
+        self._wind_speed = wind_speed
+        self._wind_direction = wind_direction
+        self.horizontal_visibility = horizontal_visibility
+        self._wind_gust = wind_gust
         self._symbol = symbol
 
     @property
     def temperature(self) -> int:
         """Air temperature (Celcius)"""
         return self._temperature
+
     @property
     def humidity(self) -> int:
         """Air humidity (Percent)"""
         return self._humidity
+
     @property
     def pressure(self) -> int:
         """Air pressure (hPa)"""
         return self._pressure
+
     @property
     def thunder(self) -> int:
         """Chance of thunder (Percent)"""
         return self._thunder
+
     @property
     def cloudiness(self) -> int:
         """Cloudiness (Percent)"""
         return self._cloudiness
+
+    @property
+    def wind_speed(self) -> float:
+        """wind speed (m/s)"""
+        return self._wind_speed
+
+    @property
+    def wind_direction(self) -> int:
+        """wind direction (degrees)"""
+        return self._wind_direction
+
+    @property
+    def precipitation(self) -> int:
+        """Precipitation
+            0	No precipitation
+            1	Snow
+            2	Snow and rain
+            3	Rain
+            4	Drizzle
+            5	Freezing rain
+            6	Freezing drizzle
+        """
+        return self._precipitation
+
+    @property
+    def mean_precipitation(self) -> float:
+        """Mean Precipitation (mm/h)"""
+        return self._mean_precipitation
+
+    @property
+    def median_precipitation(self) -> float:
+        """Median Precipitation (mm/h)"""
+        return self._median_precipitation
+
+    @property
+    def wind_gust(self) -> float:
+        """Wind gust (m/s)"""
+        return self._wind_gust
+
     @property
     def symbol(self) -> int:
         """Symbol (Percent)
@@ -145,7 +198,7 @@ class Smhi():
         json_data = await self._api.async_get_forecast_api(self._longitude, self._latitude, session)
         return _get_forecast(json_data)
 
-
+# pylint: disable=R0914, R0912
 def _get_forecast(api_result: dict) -> List[SmhiForecast]:
     """Converts results fråm API to SmhiForeCast list"""
     forecasts: List[SmhiForecast] = []
@@ -158,6 +211,13 @@ def _get_forecast(api_result: dict) -> List[SmhiForecast]:
         thunder = 0
         symbol = 0
         cloudiness = 0
+        precipitation = 0
+        mean_precipitation = 0.0
+        median_precipitation = 0.0
+        wind_speed = 0.0
+        wind_direction = 0
+        horizontal_visibility = 0.0
+        wind_gust = 0.0
 
         for param in forecast['parameters']:
             if param['name'] == 't':
@@ -176,6 +236,23 @@ def _get_forecast(api_result: dict) -> List[SmhiForecast]:
                     cloudiness = 100 #If not determined use 100%
             elif param['name'] == 'Wsymb2':
                 symbol = int(param['values'][0]) #category
+            elif param['name'] == 'pcat':
+                precipitation = int(param['values'][0]) #percipitation
+            elif param['name'] == 'pmean':
+                mean_precipitation = float(param['values'][0]) #mean_percipitation
+            elif param['name'] == 'pmedian':
+                median_precipitation = int(param['values'][0]) #median precipitation
+            elif param['name'] == 'ws':
+                wind_speed = float(param['values'][0]) #wind speed
+            elif param['name'] == 'wd':
+                wind_direction = int(param['values'][0]) #wind direction
+            elif param['name'] == 'vis':
+                horizontal_visibility = float(param['values'][0]) #Visibility
+            elif param['name'] == 'gust':
+                wind_gust = float(param['values'][0]) #wind gust speed
         forecasts.append(
-            SmhiForecast(temperature, humidity, pressure, thunder, cloudiness, symbol))
+            SmhiForecast(temperature, humidity, pressure, thunder,
+                         cloudiness, precipitation, wind_direction,
+                         wind_speed, horizontal_visibility, wind_gust,
+                         mean_precipitation, median_precipitation, symbol))
     return forecasts
