@@ -5,22 +5,31 @@ API:s
 """
 from typing import List
 import abc
+from datetime import datetime
 import json
 from urllib.request import urlopen
 import aiohttp
+
+APIURL_TEMPLATE = "https://opendata-download-metfcst.smhi.se/api/category"\
+                    "/pmp3g/version/2/geotype/point/lon/{}/lat/{}/data.json"
+
+class SmhiForecastException(Exception):
+    """Exception thrown if failing to access API"""
+    pass
+
 
 class SmhiForecast():
     """
     Class to hold forecast data
     """
-    # pylint: disable=R0913, R0902
+    # pylint: disable=R0913, R0902, R0914
     def __init__(
             self, temperature: int, humidity: int, pressure: int,
             thunder: int, cloudiness: int, precipitation: int,
             wind_direction: int, wind_speed: float,
             horizontal_visibility: float, wind_gust: float,
             mean_precipitation: float, median_precipitation: float,
-            symbol: int) -> None:
+            symbol: int, valid_time: datetime) -> None:
         """Constructor"""
         self._temperature = temperature
         self._humidity = humidity
@@ -35,6 +44,7 @@ class SmhiForecast():
         self.horizontal_visibility = horizontal_visibility
         self._wind_gust = wind_gust
         self._symbol = symbol
+        self._valid_time = valid_time
 
     @property
     def temperature(self) -> int:
@@ -131,6 +141,11 @@ class SmhiForecast():
             27	Heavy snowfall"""
         return self._symbol
 
+    @property
+    def valid_time(self) -> datetime:
+        """Valid time"""
+        return self._valid_time
+
 # pylint: disable=R0903
 class SmhiAPIBase():
     """
@@ -142,22 +157,20 @@ class SmhiAPIBase():
         raise NotImplementedError('users must define get_forecast to use this base class')
 
     @abc.abstractmethod
-    async def async_get_forecast_api(self, longitude: str, latitude: str,
-                                     session: aiohttp.ClientSession) -> {}:
+    async def async_get_forecast_api(self, longitude: str, latitude: str) -> {}:
         """Override this"""
         raise NotImplementedError('users must define get_forecast to use this base class')
 
 # pylint: disable=R0903
-class ShmiAPI(SmhiAPIBase):
+class SmhiAPI(SmhiAPIBase):
     """Default implementation for SMHI api"""
-
-    def __init__(self):
-        self.url_template = "https://opendata-download-metfcst.smhi.se/api/category"\
-                            "/pmp3g/version/2/geotype/point/lon/{}/lat/{}/data.json"
+    def __init__(self) -> None:
+        """Init the API with or without session"""
+        self.session = None
 
     def get_forecast_api(self, longitude: str, latitude: str) -> {}:
         """gets data from API"""
-        api_url = self.url_template.format(longitude, latitude)
+        api_url = APIURL_TEMPLATE.format(longitude, latitude)
 
         response = urlopen(api_url)
         data = response.read().decode('utf-8')
@@ -165,16 +178,19 @@ class ShmiAPI(SmhiAPIBase):
 
         return json_data
 
-    async def async_get_forecast_api(self, longitude: str, latitude: str,
-                                     session: aiohttp.ClientSession = None) -> {}:
+    async def async_get_forecast_api(self, longitude: str, latitude: str) -> {}:
         """gets data from API asyncronious"""
-        api_url = self.url_template.format(longitude, latitude)
+        api_url = APIURL_TEMPLATE.format(longitude, latitude)
 
-        if session is None:
-            session = aiohttp.ClientSession()
+        if self.session is None:
+            self.session = aiohttp.ClientSession()
 
-        async with session.get(api_url) as response:
-            assert response.status == 200
+        async with self.session.get(api_url) as response:
+            if response.status != 200:
+                raise SmhiForecastException(
+                    "Failed to access weather API with status code {}".format(
+                        response.status)
+                )
             data = await response.text()
             return json.loads(data)
 
@@ -183,25 +199,30 @@ class Smhi():
     Class that use the Swedish Weather Institute (SMHI) weather forecast
     open API to return the current forecast data
     """
-    def __init__(self, longitude: str, latitude: str, api: SmhiAPIBase = ShmiAPI()) -> None:
-        self._longitude: str = longitude
-        self._latitude: str = latitude
-        self._api: SmhiAPIBase = api
+    def __init__(self, longitude: str, latitude: str,
+                 session: aiohttp.ClientSession = None,
+                 api: SmhiAPIBase = SmhiAPI()) -> None:
+        self._longitude = str(round(float(longitude), 6))
+        self._latitude = str(round(float(latitude), 6))
+        self._api = api
+
+        if session:
+            self._api.session = session
 
     def get_forecast(self) -> List[SmhiForecast]:
         """Returns a list of forecasts. The first in list are the current one"""
         json_data = self._api.get_forecast_api(self._longitude, self._latitude)
         return _get_forecast(json_data)
 
-    async def async_get_forecast(self, session: aiohttp.ClientSession = None) -> List[SmhiForecast]:
+    async def async_get_forecast(self) -> List[SmhiForecast]:
         """Returns a list of forecasts. The first in list are the current one"""
-        json_data = await self._api.async_get_forecast_api(self._longitude, self._latitude, session)
+        json_data = await self._api.async_get_forecast_api(self._longitude, self._latitude)
         return _get_forecast(json_data)
 
 # pylint: disable=R0914, R0912
 def _get_forecast(api_result: dict) -> List[SmhiForecast]:
     """Converts results fråm API to SmhiForeCast list"""
-    forecasts: List[SmhiForecast] = []
+    forecasts = []
 
     # Get the parameters
     for forecast in api_result['timeSeries']:
@@ -218,6 +239,9 @@ def _get_forecast(api_result: dict) -> List[SmhiForecast]:
         wind_direction = 0
         horizontal_visibility = 0.0
         wind_gust = 0.0
+        valid_time = datetime.min
+
+        valid_time = datetime.strptime(forecast['validTime'], "%Y-%m-%dT%H:%M:%SZ")
 
         for param in forecast['parameters']:
             if param['name'] == 't':
@@ -254,5 +278,6 @@ def _get_forecast(api_result: dict) -> List[SmhiForecast]:
             SmhiForecast(temperature, humidity, pressure, thunder,
                          cloudiness, precipitation, wind_direction,
                          wind_speed, horizontal_visibility, wind_gust,
-                         mean_precipitation, median_precipitation, symbol))
+                         mean_precipitation, median_precipitation, symbol,
+                         valid_time))
     return forecasts

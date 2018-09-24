@@ -1,92 +1,134 @@
 """
     Automatic tests for the smhi_lib
 """
-# pylint: disable=C0302,W0621,R0903
+# pylint: disable=C0302,W0621,R0903, W0212
 
+from datetime import datetime
 from typing import List
-import pytest
+
 import aiohttp
-from smhi.smhi_lib import Smhi, SmhiForecast, SmhiAPIBase, ShmiAPI
+import pytest
+
+from smhi.smhi_lib import (Smhi, SmhiForecast, SmhiAPIBase, SmhiAPI, SmhiForecastException)
+from smhi import smhi_lib
 
 @pytest.fixture
 def smhi() -> Smhi:
-    '''Returns the smhi object '''
-    return Smhi('17.041', '62.339', FakeSmhiApi())
+    """Returns the smhi object."""
+    return Smhi('17.041', '62.339', api=FakeSmhiApi())
 
 @pytest.fixture
 def smhi_forecasts() -> List[SmhiForecast]:
-    '''Returns the smhi object '''
+    """Returns the smhi object."""
     return smhi().get_forecast()
 
 @pytest.fixture
 def first_smhi_forecast() -> SmhiForecast:
-    '''Returns the smhi object '''
+    """Returns the smhi object."""
     return smhi().get_forecast()[0]
 
 @pytest.fixture
 def first_smhi_forecast2() -> SmhiForecast:
-    '''Returns the smhi object '''
+    """Returns the smhi object."""
     return smhi().get_forecast()[1]
 
-def test_nr_of_items(smhi_forecasts):
-    '''Tests the number of items returned matches the inputdata'''
+
+@pytest.mark.asyncio
+async def test_provide_session_constructor() -> None:
+    """Test the constructor that provides session."""
+    api = Smhi("1.1234567", "1.9876543",
+               session=aiohttp.ClientSession(),
+               api=FakeSmhiApi())
+
+    assert api._api.session
+
+
+def test_max_six_digits_round() -> None:
+    """Test the max six digits allowed."""
+    api = Smhi("1.1234567", "1.9876543")
+    assert api._latitude == "1.987654"
+    assert api._longitude == "1.123457"
+
+
+def test_nr_of_items(smhi_forecasts) -> None:
+    """Tests the number of items returned matches the inputdata."""
     assert len(smhi_forecasts) == 71
+
 
 def test_temperature(first_smhi_forecast):
     '''test'''
     assert first_smhi_forecast.temperature == 17
 
+
 def test_humidity(first_smhi_forecast):
     '''test'''
     assert first_smhi_forecast.humidity == 55
+
 
 def test_pressure(first_smhi_forecast):
     '''test'''
     assert first_smhi_forecast.pressure == 1024
 
+
 def test_thunder(first_smhi_forecast):
     '''test'''
     assert first_smhi_forecast.thunder == 33
+
 
 def test_cloudiness(first_smhi_forecast):
     '''test'''
     assert first_smhi_forecast.cloudiness == 50
 
+
 def test_precipitation(first_smhi_forecast):
     '''test'''
     assert first_smhi_forecast.precipitation == 1
+
 
 def test_mean_precipitation(first_smhi_forecast):
     '''test'''
     assert first_smhi_forecast.mean_precipitation == 2.0
 
+
 def test_median_precipitation(first_smhi_forecast):
     '''test'''
     assert first_smhi_forecast.median_precipitation == 1.0
+
 
 def test_wind_speed(first_smhi_forecast):
     '''test'''
     assert first_smhi_forecast.wind_speed == 1.9
 
+
 def test_wind_direction(first_smhi_forecast):
     '''test'''
     assert first_smhi_forecast.wind_direction == 134
+
 
 def test_wind_gust(first_smhi_forecast):
     '''test'''
     assert first_smhi_forecast.wind_gust == 4.7
 
+
 def test_horizontal_visibility(first_smhi_forecast):
     '''test'''
     assert first_smhi_forecast.horizontal_visibility == 50
+
 
 def test_symbol(first_smhi_forecast):
     '''test'''
     assert first_smhi_forecast.symbol == 1
 
+
+def test_valid_time(first_smhi_forecast):
+    '''test'''
+    assert first_smhi_forecast.valid_time == datetime(2018, 9, 1, 15, 0, 0)
+
+
 def test_cloudiness_when_inconclusive(first_smhi_forecast2):
     '''test'''
     assert first_smhi_forecast2.cloudiness == 100
+
 
 def test_use_abstract_base_class():
     '''test the not implemented stuff'''
@@ -94,25 +136,30 @@ def test_use_abstract_base_class():
         test = SmhiAPIBase()
         test.get_forecast_api('17.00', '62.1')
 
+
 def test_smhi_integration_test():
     '''Only test that uses the actual service. Make sure service is up if fails'''
-    api = ShmiAPI()
+    api = SmhiAPI()
     forecast = api.get_forecast_api('17.00', '62.1')
     assert forecast is not None
+
 
 @pytest.mark.asyncio
 async def test_smhi_async_integration_test():
     '''Only test that uses the actual service. Make sure service is up if fails'''
-    api = ShmiAPI()
+    api = SmhiAPI()
     forecast = await api.async_get_forecast_api('17.00', '62.1')
     assert forecast is not None
+
 
 @pytest.mark.asyncio
 async def test_smhi_async_integration_test_use_session():
     '''Only test that uses the actual service. Make sure service is up if fails'''
-    api = ShmiAPI()
-    forecast = await api.async_get_forecast_api('17.00', '62.1', aiohttp.ClientSession())
+    api = SmhiAPI()
+    api.session = aiohttp.ClientSession()
+    forecast = await api.async_get_forecast_api('17.00', '62.1')
     assert forecast is not None
+
 
 @pytest.mark.asyncio
 async def test_smhi_async_get_forecast_integration():
@@ -123,39 +170,43 @@ async def test_smhi_async_get_forecast_integration():
     assert forecast[0] is not None
     assert forecast is not None
 
+
 @pytest.mark.asyncio
 async def test_smhi_async_get_forecast_integration_use_session():
     '''test the async stuff'''
     smhi_api = smhi()
-    forecast = await smhi_api.async_get_forecast(aiohttp.ClientSession())
+    smhi_api.session = aiohttp.ClientSession()
+    forecast = await smhi_api.async_get_forecast()
 
     assert forecast[0] is not None
     assert forecast is not None
+
 
 @pytest.mark.asyncio
 async def test_async_use_abstract_base_class():
     '''test the not implemented stuff'''
     with pytest.raises(NotImplementedError):
         test = SmhiAPIBase()
-        await test.async_get_forecast_api('17.00', '62.1', None)
+        await test.async_get_forecast_api('17.00', '62.1')
+
 
 @pytest.mark.asyncio
 async def test_async_error_from_api():
     '''test the async stuff'''
-    api = ShmiAPI()
+    api = SmhiAPI()
     #Faulty template
-    api.url_template = "https://opendata-download-metfcst.smhi.se/api/category"\
+    smhi_lib.APIURL_TEMPLATE = "https://opendata-download-metfcst.smhi.se/api/category"\
                        "/pmp3g/version/2/geotype/point/lon/{}/lat/{}/dataa.json"
 
-    smhi_error = Smhi('17.00', '62.1', api)
-    with pytest.raises(AssertionError):
+    smhi_error = Smhi('17.00', '62.1', api=api)
+    with pytest.raises(SmhiForecastException):
         await smhi_error.async_get_forecast()
+
 
 class FakeSmhiApi(SmhiAPIBase):
     '''Implements fake class to return API data'''
 
-    async def async_get_forecast_api(self, longitude: str, latitude: str,
-                                     session: aiohttp.ClientSession = None) -> {}:
+    async def async_get_forecast_api(self, longitude: str, latitude: str) -> {}:
         """Real data from the version code works from"""
         return self.get_forecast_api(longitude, latitude)
 
