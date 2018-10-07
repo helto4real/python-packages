@@ -8,7 +8,6 @@ from typing import List
 
 import aiohttp
 import pytest
-
 from smhi.smhi_lib import (Smhi, SmhiForecast, SmhiAPIBase, SmhiAPI, SmhiForecastException)
 from smhi import smhi_lib
 
@@ -52,13 +51,20 @@ def test_max_six_digits_round() -> None:
 
 def test_nr_of_items(smhi_forecasts) -> None:
     """Tests the number of items returned matches the inputdata."""
-    assert len(smhi_forecasts) == 71
+    assert len(smhi_forecasts) == 10
 
 
 def test_temperature(first_smhi_forecast):
     '''test'''
     assert first_smhi_forecast.temperature == 17
 
+def test_temperature_max(first_smhi_forecast):
+    '''test'''
+    assert first_smhi_forecast.temperature_max == 17
+
+def test_temperature_min(first_smhi_forecast):
+    '''test'''
+    assert first_smhi_forecast.temperature_min == 6
 
 def test_humidity(first_smhi_forecast):
     '''test'''
@@ -87,12 +93,7 @@ def test_precipitation(first_smhi_forecast):
 
 def test_mean_precipitation(first_smhi_forecast):
     '''test'''
-    assert first_smhi_forecast.mean_precipitation == 2.0
-
-
-def test_median_precipitation(first_smhi_forecast):
-    '''test'''
-    assert first_smhi_forecast.median_precipitation == 1.0
+    assert first_smhi_forecast.mean_precipitation == 0.00390625
 
 
 def test_wind_speed(first_smhi_forecast):
@@ -159,14 +160,13 @@ async def test_smhi_async_integration_test_use_session():
     api.session = aiohttp.ClientSession()
     forecast = await api.async_get_forecast_api('17.00', '62.1')
     assert forecast is not None
-
+    await api.session.close()
 
 @pytest.mark.asyncio
 async def test_smhi_async_get_forecast_integration():
     '''test the async stuff'''
     smhi_api = smhi()
     forecast = await smhi_api.async_get_forecast()
-
     assert forecast[0] is not None
     assert forecast is not None
 
@@ -202,6 +202,33 @@ async def test_async_error_from_api():
     with pytest.raises(SmhiForecastException):
         await smhi_error.async_get_forecast()
 
+
+def test_precipitation_mean_value():
+    """Test average precipitation calulation.
+
+    Average for the forecast is calculated the average
+    for the whole day.
+    """
+    fake_api = FakeSmhiApi()
+    fake_forecast = fake_api.get_forecast_api(' ', ' ')
+    total_mean_precipitation = -1.0
+    for forecast in fake_forecast['timeSeries']:
+        valid_time = datetime.strptime(forecast['validTime'], "%Y-%m-%dT%H:%M:%SZ")
+        if (valid_time.day == 8 and valid_time.hour > 0) or \
+           (valid_time.day == 9 and valid_time.hour == 0):
+            print(valid_time)
+            for param in forecast['parameters']:
+                if param['name'] == 'pmean':
+                    print(float(param['values'][0]))
+                    if total_mean_precipitation < 0:
+                        total_mean_precipitation = float(param['values'][0])
+                    else:
+                        total_mean_precipitation = (
+                            total_mean_precipitation + float(param['values'][0]))/2.0
+
+    api = smhi()
+    forecast = api.get_forecast()
+    assert forecast[7].mean_precipitation == total_mean_precipitation
 
 class FakeSmhiApi(SmhiAPIBase):
     '''Implements fake class to return API data'''
@@ -3993,7 +4020,7 @@ class FakeSmhiApi(SmhiAPIBase):
                             "level": 0,
                             "unit": "octas",
                             "values": [
-                                6
+                                9
                             ]
                         },
                         {

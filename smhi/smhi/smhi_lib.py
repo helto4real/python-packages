@@ -3,10 +3,12 @@ Module smhi_lib contains the code to get forecasts from
 the Swedish weather institute (SMHI) through the open
 API:s
 """
+import json
 from typing import List
+
 import abc
 from datetime import datetime
-import json
+
 from urllib.request import urlopen
 import aiohttp
 
@@ -24,21 +26,21 @@ class SmhiForecast():
     """
     # pylint: disable=R0913, R0902, R0914
     def __init__(
-            self, temperature: int, humidity: int, pressure: int,
-            thunder: int, cloudiness: int, precipitation: int,
-            wind_direction: int, wind_speed: float,
+            self, temperature: int, temperature_max: int, temperature_min: int,
+            humidity: int, pressure: int, thunder: int, cloudiness: int,
+            precipitation: int, wind_direction: int, wind_speed: float,
             horizontal_visibility: float, wind_gust: float,
-            mean_precipitation: float, median_precipitation: float,
-            symbol: int, valid_time: datetime) -> None:
+            mean_precipitation: float, symbol: int, valid_time: datetime) -> None:
         """Constructor"""
         self._temperature = temperature
+        self._temperature_max = temperature_max
+        self._temperature_min = temperature_min
         self._humidity = humidity
         self._pressure = pressure
         self._thunder = thunder
         self._cloudiness = cloudiness
         self._precipitation = precipitation
         self._mean_precipitation = mean_precipitation
-        self._median_precipitation = median_precipitation
         self._wind_speed = wind_speed
         self._wind_direction = wind_direction
         self.horizontal_visibility = horizontal_visibility
@@ -50,6 +52,16 @@ class SmhiForecast():
     def temperature(self) -> int:
         """Air temperature (Celcius)"""
         return self._temperature
+
+    @property
+    def temperature_max(self) -> int:
+        """Air temperature max during the day (Celcius)"""
+        return self._temperature_max
+
+    @property
+    def temperature_min(self) -> int:
+        """Air temperature min during the day (Celcius)"""
+        return self._temperature_min
 
     @property
     def humidity(self) -> int:
@@ -98,11 +110,6 @@ class SmhiForecast():
     def mean_precipitation(self) -> float:
         """Mean Precipitation (mm/h)"""
         return self._mean_precipitation
-
-    @property
-    def median_precipitation(self) -> float:
-        """Median Precipitation (mm/h)"""
-        return self._median_precipitation
 
     @property
     def wind_gust(self) -> float:
@@ -219,30 +226,21 @@ class Smhi():
         json_data = await self._api.async_get_forecast_api(self._longitude, self._latitude)
         return _get_forecast(json_data)
 
-# pylint: disable=R0914, R0912
+# pylint: disable=R0914, R0912, W0212, R0915
 def _get_forecast(api_result: dict) -> List[SmhiForecast]:
     """Converts results fråm API to SmhiForeCast list"""
     forecasts = []
 
+    # Forecast summary values
+    forecast_temp_min = 100
+    forecast_temp_max = -100
+    forecast_mean_precipitation = float(-1.0)
+    last_time = None
+    current_forecast = None
+
     # Get the parameters
     for forecast in api_result['timeSeries']:
-        temperature = 0
-        pressure = 0
-        humidity = 0
-        thunder = 0
-        symbol = 0
-        cloudiness = 0
-        precipitation = 0
-        mean_precipitation = 0.0
-        median_precipitation = 0.0
-        wind_speed = 0.0
-        wind_direction = 0
-        horizontal_visibility = 0.0
-        wind_gust = 0.0
-        valid_time = datetime.min
-
         valid_time = datetime.strptime(forecast['validTime'], "%Y-%m-%dT%H:%M:%SZ")
-
         for param in forecast['parameters']:
             if param['name'] == 't':
                 temperature = int(param['values'][0]) #Celcisus
@@ -264,8 +262,6 @@ def _get_forecast(api_result: dict) -> List[SmhiForecast]:
                 precipitation = int(param['values'][0]) #percipitation
             elif param['name'] == 'pmean':
                 mean_precipitation = float(param['values'][0]) #mean_percipitation
-            elif param['name'] == 'pmedian':
-                median_precipitation = int(param['values'][0]) #median precipitation
             elif param['name'] == 'ws':
                 wind_speed = float(param['values'][0]) #wind speed
             elif param['name'] == 'wd':
@@ -274,10 +270,48 @@ def _get_forecast(api_result: dict) -> List[SmhiForecast]:
                 horizontal_visibility = float(param['values'][0]) #Visibility
             elif param['name'] == 'gust':
                 wind_gust = float(param['values'][0]) #wind gust speed
-        forecasts.append(
-            SmhiForecast(temperature, humidity, pressure, thunder,
-                         cloudiness, precipitation, wind_direction,
-                         wind_speed, horizontal_visibility, wind_gust,
-                         mean_precipitation, median_precipitation, symbol,
-                         valid_time))
+
+        if not last_time or valid_time.hour == 12:
+            if not last_time:
+                # First is current weather
+                forecast_temp_max = temperature
+                forecast_temp_min = temperature
+                forecast_mean_precipitation = mean_precipitation
+
+            if forecast_mean_precipitation == -1.0:
+                forecast_mean_precipitation = mean_precipitation
+            else:
+                forecast_mean_precipitation = (forecast_mean_precipitation + mean_precipitation)/2.0
+
+            current_forecast = \
+                SmhiForecast(temperature, forecast_temp_max, forecast_temp_min,
+                             humidity, pressure, thunder, cloudiness, precipitation,
+                             wind_direction, wind_speed, horizontal_visibility,
+                             wind_gust, forecast_mean_precipitation, symbol, valid_time)
+
+        elif last_time.day != valid_time.day:
+            forecast_mean_precipitation = (forecast_mean_precipitation + mean_precipitation)/2.0
+
+            current_forecast._temperature_max = forecast_temp_max
+            current_forecast._temperature_min = forecast_temp_min
+            current_forecast._mean_precipitation = forecast_mean_precipitation
+            forecasts.append(current_forecast)
+
+            # Just set default extreme values
+            forecast_temp_min = 100
+            forecast_temp_max = -100
+            forecast_mean_precipitation = -1.0
+        else:
+            if forecast_mean_precipitation == -1.0:
+                forecast_mean_precipitation = mean_precipitation
+            else:
+                forecast_mean_precipitation = (forecast_mean_precipitation + mean_precipitation)/2.0
+
+        if forecast_temp_min > temperature:
+            forecast_temp_min = temperature
+        if forecast_temp_max < temperature:
+            forecast_temp_max = temperature
+
+        last_time = valid_time
+
     return forecasts
