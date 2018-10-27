@@ -271,13 +271,13 @@ def _get_forecast(api_result: dict) -> List[SmhiForecast]:
             elif param['name'] == 'gust':
                 wind_gust = float(param['values'][0]) #wind gust speed
 
-        if not last_time or valid_time.hour == 12:
-            if not last_time:
+        if last_time is None or valid_time.hour == 12:
+            if last_time is None:
                 # First is current weather
                 forecast_temp_max = temperature
                 forecast_temp_min = temperature
                 forecast_mean_precipitation = mean_precipitation
-
+                
             if forecast_mean_precipitation == -1.0:
                 forecast_mean_precipitation = mean_precipitation
             else:
@@ -288,6 +288,9 @@ def _get_forecast(api_result: dict) -> List[SmhiForecast]:
                              humidity, pressure, thunder, cloudiness, precipitation,
                              wind_direction, wind_speed, horizontal_visibility,
                              wind_gust, forecast_mean_precipitation, symbol, valid_time)
+
+            if last_time is None: #Always add the most current one
+                forecasts.append(current_forecast)
 
         elif last_time.day != valid_time.day:
             forecast_mean_precipitation = (forecast_mean_precipitation + mean_precipitation)/2.0

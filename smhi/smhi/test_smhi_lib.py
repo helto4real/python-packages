@@ -17,6 +17,11 @@ def smhi() -> Smhi:
     return Smhi('17.041', '62.339', api=FakeSmhiApi())
 
 @pytest.fixture
+def smhi_real() -> Smhi:
+    """Returns the smhi object."""
+    return Smhi('17.041326', '62.339859')
+
+@pytest.fixture
 def smhi_forecasts() -> List[SmhiForecast]:
     """Returns the smhi object."""
     return smhi().get_forecast()
@@ -29,7 +34,7 @@ def first_smhi_forecast() -> SmhiForecast:
 @pytest.fixture
 def first_smhi_forecast2() -> SmhiForecast:
     """Returns the smhi object."""
-    return smhi().get_forecast()[1]
+    return smhi().get_forecast()[2]
 
 
 @pytest.mark.asyncio
@@ -51,7 +56,7 @@ def test_max_six_digits_round() -> None:
 
 def test_nr_of_items(smhi_forecasts) -> None:
     """Tests the number of items returned matches the inputdata."""
-    assert len(smhi_forecasts) == 10
+    assert len(smhi_forecasts) == 11
 
 
 def test_temperature(first_smhi_forecast):
@@ -158,7 +163,7 @@ async def test_smhi_async_integration_test_use_session():
     '''Only test that uses the actual service. Make sure service is up if fails'''
     api = SmhiAPI()
     api.session = aiohttp.ClientSession()
-    forecast = await api.async_get_forecast_api('17.00', '62.1')
+    forecast = await api.async_get_forecast_api('17.041326', '62.339859')
     assert forecast is not None
     await api.session.close()
 
@@ -228,7 +233,7 @@ def test_precipitation_mean_value():
 
     api = smhi()
     forecast = api.get_forecast()
-    assert forecast[7].mean_precipitation == total_mean_precipitation
+    assert forecast[8].mean_precipitation == total_mean_precipitation
 
 class FakeSmhiApi(SmhiAPIBase):
     '''Implements fake class to return API data'''
