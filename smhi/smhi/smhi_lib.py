@@ -266,7 +266,7 @@ def _get_forecast(api_result: dict) -> List[SmhiForecast]:
     forecasts_ordered = _get_all_forecast_from_api(api_result)
 
     # Used to calc the daycount
-    day_nr: int = 1
+    day_nr = 1
 
     for day in forecasts_ordered:
         forecasts_day: List[SmhiForecast] = forecasts_ordered[day]
