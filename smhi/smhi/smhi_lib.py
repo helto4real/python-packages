@@ -3,17 +3,19 @@ Module smhi_lib contains the code to get forecasts from
 the Swedish weather institute (SMHI) through the open
 API:s
 """
+import abc
+import aiohttp
+import copy
 import json
+
+from collections import OrderedDict
+from datetime import datetime
+from urllib.request import urlopen
 from typing import List
 
-import abc
-from datetime import datetime
-
-from urllib.request import urlopen
-import aiohttp
-
 APIURL_TEMPLATE = "https://opendata-download-metfcst.smhi.se/api/category"\
-                    "/pmp3g/version/2/geotype/point/lon/{}/lat/{}/data.json"
+    "/pmp3g/version/2/geotype/point/lon/{}/lat/{}/data.json"
+
 
 class SmhiForecastException(Exception):
     """Exception thrown if failing to access API"""
@@ -24,13 +26,15 @@ class SmhiForecast():
     """
     Class to hold forecast data
     """
+
     # pylint: disable=R0913, R0902, R0914
     def __init__(
             self, temperature: int, temperature_max: int, temperature_min: int,
             humidity: int, pressure: int, thunder: int, cloudiness: int,
             precipitation: int, wind_direction: int, wind_speed: float,
             horizontal_visibility: float, wind_gust: float,
-            mean_precipitation: float, symbol: int, valid_time: datetime) -> None:
+            mean_precipitation: float, total_precipitation: float, symbol: int,
+            valid_time: datetime) -> None:
         """Constructor"""
         self._temperature = temperature
         self._temperature_max = temperature_max
@@ -41,6 +45,7 @@ class SmhiForecast():
         self._cloudiness = cloudiness
         self._precipitation = precipitation
         self._mean_precipitation = mean_precipitation
+        self._total_precipitation = total_precipitation
         self._wind_speed = wind_speed
         self._wind_direction = wind_direction
         self.horizontal_visibility = horizontal_visibility
@@ -112,6 +117,11 @@ class SmhiForecast():
         return self._mean_precipitation
 
     @property
+    def total_precipitation(self) -> float:
+        """Mean Precipitation (mm/h)"""
+        return self._total_precipitation
+
+    @property
     def wind_gust(self) -> float:
         """Wind gust (m/s)"""
         return self._wind_gust
@@ -154,23 +164,32 @@ class SmhiForecast():
         return self._valid_time
 
 # pylint: disable=R0903
+
+
 class SmhiAPIBase():
     """
-    Baseclass to use as dependecy incjection pattern for easier automatic testing
+    Baseclass to use as dependecy incjection pattern for easier
+    automatic testing
     """
     @abc.abstractmethod
     def get_forecast_api(self, longitude: str, latitude: str) -> {}:
         """Override this"""
-        raise NotImplementedError('users must define get_forecast to use this base class')
+        raise NotImplementedError(
+            'users must define get_forecast to use this base class')
 
     @abc.abstractmethod
-    async def async_get_forecast_api(self, longitude: str, latitude: str) -> {}:
+    async def async_get_forecast_api(self, longitude: str,
+                                     latitude: str) -> {}:
         """Override this"""
-        raise NotImplementedError('users must define get_forecast to use this base class')
+        raise NotImplementedError(
+            'users must define get_forecast to use this base class')
 
 # pylint: disable=R0903
+
+
 class SmhiAPI(SmhiAPIBase):
     """Default implementation for SMHI api"""
+
     def __init__(self) -> None:
         """Init the API with or without session"""
         self.session = None
@@ -185,7 +204,8 @@ class SmhiAPI(SmhiAPIBase):
 
         return json_data
 
-    async def async_get_forecast_api(self, longitude: str, latitude: str) -> {}:
+    async def async_get_forecast_api(self, longitude: str,
+                                     latitude: str) -> {}:
         """gets data from API asyncronious"""
         api_url = APIURL_TEMPLATE.format(longitude, latitude)
 
@@ -201,11 +221,13 @@ class SmhiAPI(SmhiAPIBase):
             data = await response.text()
             return json.loads(data)
 
+
 class Smhi():
     """
     Class that use the Swedish Weather Institute (SMHI) weather forecast
     open API to return the current forecast data
     """
+
     def __init__(self, longitude: str, latitude: str,
                  session: aiohttp.ClientSession = None,
                  api: SmhiAPIBase = SmhiAPI()) -> None:
@@ -217,104 +239,146 @@ class Smhi():
             self._api.session = session
 
     def get_forecast(self) -> List[SmhiForecast]:
-        """Returns a list of forecasts. The first in list are the current one"""
+        """
+        Returns a list of forecasts. The first in list are the current one
+        """
         json_data = self._api.get_forecast_api(self._longitude, self._latitude)
         return _get_forecast(json_data)
 
     async def async_get_forecast(self) -> List[SmhiForecast]:
-        """Returns a list of forecasts. The first in list are the current one"""
-        json_data = await self._api.async_get_forecast_api(self._longitude, self._latitude)
+        """
+        Returns a list of forecasts. The first in list are the current one
+        """
+        json_data = await self._api.async_get_forecast_api(self._longitude,
+                                                           self._latitude)
         return _get_forecast(json_data)
+
 
 # pylint: disable=R0914, R0912, W0212, R0915
 def _get_forecast(api_result: dict) -> List[SmhiForecast]:
     """Converts results fråm API to SmhiForeCast list"""
     forecasts = []
 
-    # Forecast summary values
-    forecast_temp_min = 100
-    forecast_temp_max = -100
-    forecast_mean_precipitation = float(-1.0)
+    # Need the ordered dict to get
+    # the days in order in next stage
+    forecasts_ordered = OrderedDict()
+
+    forecasts_ordered = _get_all_forecast_from_api(api_result)
+
+    # Used to calc the daycount
+    day_nr: int = 1
+
+    for day in forecasts_ordered:
+        forecasts_day: List[SmhiForecast] = forecasts_ordered[day]
+
+        if day_nr == 1:
+            # Add the most recent forecast
+            forecasts.append(copy.deepcopy(forecasts_day[0]))
+
+        total_precipitation = float(0.0)
+        forecast_temp_max = -100.0
+        forecast_temp_min = 100.0
+        forecast = None
+        for forcast_day in forecasts_day:
+            temperature = forcast_day.temperature
+            if forecast_temp_min > temperature:
+                forecast_temp_min = temperature
+            if forecast_temp_max < temperature:
+                forecast_temp_max = temperature
+
+            if forcast_day.valid_time.hour == 12:
+                forecast = copy.deepcopy(forcast_day)
+
+            total_precipitation = total_precipitation + \
+                forcast_day.mean_precipitation
+
+        if forecast is None:
+            # We passed 12 noon, set to current
+            forecast = forecasts_day[0]
+
+        forecast._temperature_max = forecast_temp_max
+        forecast._temperature_min = forecast_temp_min
+        forecast._total_precipitation = total_precipitation
+        forecast._mean_precipitation = total_precipitation/24
+        forecasts.append(forecast)
+        day_nr = day_nr + 1
+
+    return forecasts
+
+# pylint: disable=R0914, R0912, W0212, R0915
+
+
+def _get_all_forecast_from_api(api_result: dict) -> OrderedDict:
+    """Converts results fråm API to SmhiForeCast list"""
+    # Total time in hours since last forecast
+    total_hours_last_forecast = 1.0
+
+    # Last forecast time
     last_time = None
-    current_forecast = None
+
+    # Need the ordered dict to get
+    # the days in order in next stage
+    forecasts_ordered = OrderedDict()
 
     # Get the parameters
     for forecast in api_result['timeSeries']:
-        valid_time = datetime.strptime(forecast['validTime'], "%Y-%m-%dT%H:%M:%SZ")
+
+        valid_time = datetime.strptime(
+            forecast['validTime'], "%Y-%m-%dT%H:%M:%SZ")
         for param in forecast['parameters']:
             if param['name'] == 't':
-                temperature = int(param['values'][0]) #Celcisus
+                temperature = float(param['values'][0])  # Celcisus
             elif param['name'] == 'r':
-                humidity = int(param['values'][0]) #Percent
+                humidity = int(param['values'][0])  # Percent
             elif param['name'] == 'msl':
-                pressure = int(param['values'][0])  #hPa
+                pressure = int(param['values'][0])  # hPa
             elif param['name'] == 'tstm':
-                thunder = int(param['values'][0])   #Percent
+                thunder = int(param['values'][0])  # Percent
             elif param['name'] == 'tcc_mean':
-                octa = int(param['values'][0])       #Cloudiness in octas
-                if 0 <= octa <= 8: # Between 0 -> 8
-                    cloudiness = round(100*octa/8) # Convert octas to percent
+                octa = int(param['values'][0])  # Cloudiness in octas
+                if 0 <= octa <= 8:  # Between 0 -> 8
+                    cloudiness = round(100*octa/8)  # Convert octas to percent
                 else:
-                    cloudiness = 100 #If not determined use 100%
+                    cloudiness = 100  # If not determined use 100%
             elif param['name'] == 'Wsymb2':
-                symbol = int(param['values'][0]) #category
+                symbol = int(param['values'][0])  # category
             elif param['name'] == 'pcat':
-                precipitation = int(param['values'][0]) #percipitation
+                precipitation = int(param['values'][0])  # percipitation
             elif param['name'] == 'pmean':
-                mean_precipitation = float(param['values'][0]) #mean_percipitation
+                mean_precipitation = float(
+                    param['values'][0])  # mean_percipitation
             elif param['name'] == 'ws':
-                wind_speed = float(param['values'][0]) #wind speed
+                wind_speed = float(param['values'][0])  # wind speed
             elif param['name'] == 'wd':
-                wind_direction = int(param['values'][0]) #wind direction
+                wind_direction = int(param['values'][0])  # wind direction
             elif param['name'] == 'vis':
-                horizontal_visibility = float(param['values'][0]) #Visibility
+                horizontal_visibility = float(param['values'][0])  # Visibility
             elif param['name'] == 'gust':
-                wind_gust = float(param['values'][0]) #wind gust speed
+                wind_gust = float(param['values'][0])  # wind gust speed
 
-        if last_time is None or valid_time.hour == 12:
-            if last_time is None:
-                # First is current weather
-                forecast_temp_max = temperature
-                forecast_temp_min = temperature
-                forecast_mean_precipitation = mean_precipitation
-                
-            if forecast_mean_precipitation == -1.0:
-                forecast_mean_precipitation = mean_precipitation
-            else:
-                forecast_mean_precipitation = (forecast_mean_precipitation + mean_precipitation)/2.0
+        roundedTemp = int(round(temperature))
 
-            current_forecast = \
-                SmhiForecast(temperature, forecast_temp_max, forecast_temp_min,
-                             humidity, pressure, thunder, cloudiness, precipitation,
-                             wind_direction, wind_speed, horizontal_visibility,
-                             wind_gust, forecast_mean_precipitation, symbol, valid_time)
+        if last_time is not None:
+            total_hours_last_forecast = (valid_time - last_time).seconds/60/60
 
-            if last_time is None: #Always add the most current one
-                forecasts.append(current_forecast)
+        # Total precipitation, have to calculate with the nr of
+        # hours since last forecast to get correct total value
+        tp = round(mean_precipitation*total_hours_last_forecast, 2)
 
-        elif last_time.day != valid_time.day:
-            forecast_mean_precipitation = (forecast_mean_precipitation + mean_precipitation)/2.0
+        forecast = \
+            SmhiForecast(roundedTemp, roundedTemp, roundedTemp,
+                         humidity, pressure, thunder, cloudiness,
+                         precipitation, wind_direction, wind_speed,
+                         horizontal_visibility, wind_gust,
+                         round(mean_precipitation, 1), tp, symbol,
+                         valid_time)
 
-            current_forecast._temperature_max = forecast_temp_max
-            current_forecast._temperature_min = forecast_temp_min
-            current_forecast._mean_precipitation = forecast_mean_precipitation
-            forecasts.append(current_forecast)
+        if valid_time.day not in forecasts_ordered:
+            # add a new list
+            forecasts_ordered[valid_time.day] = []
 
-            # Just set default extreme values
-            forecast_temp_min = 100
-            forecast_temp_max = -100
-            forecast_mean_precipitation = -1.0
-        else:
-            if forecast_mean_precipitation == -1.0:
-                forecast_mean_precipitation = mean_precipitation
-            else:
-                forecast_mean_precipitation = (forecast_mean_precipitation + mean_precipitation)/2.0
-
-        if forecast_temp_min > temperature:
-            forecast_temp_min = temperature
-        if forecast_temp_max < temperature:
-            forecast_temp_max = temperature
+        forecasts_ordered[valid_time.day].append(forecast)
 
         last_time = valid_time
 
-    return forecasts
+    return forecasts_ordered

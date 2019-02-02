@@ -11,6 +11,8 @@ import pytest
 from smhi.smhi_lib import (Smhi, SmhiForecast, SmhiAPIBase, SmhiAPI, SmhiForecastException)
 from smhi import smhi_lib
 
+import logging
+
 @pytest.fixture
 def smhi() -> Smhi:
     """Returns the smhi object."""
@@ -19,33 +21,35 @@ def smhi() -> Smhi:
 @pytest.fixture
 def smhi_real() -> Smhi:
     """Returns the smhi object."""
-    return Smhi('17.041326', '62.339859')
+    return Smhi('17.661578', '59.514065')
+    #return Smhi('17.026864', '62.3400589')
+    
+@pytest.fixture
+def smhi_forecasts(smhi) -> List[SmhiForecast]:
+    """Returns the smhi object."""
+    return smhi.get_forecast()
 
 @pytest.fixture
-def smhi_forecasts() -> List[SmhiForecast]:
+def first_smhi_forecast(smhi) -> SmhiForecast:
     """Returns the smhi object."""
-    return smhi().get_forecast()
+    return smhi.get_forecast()[1]
 
 @pytest.fixture
-def first_smhi_forecast() -> SmhiForecast:
+def first_smhi_forecast2(smhi) -> SmhiForecast:
     """Returns the smhi object."""
-    return smhi().get_forecast()[0]
-
-@pytest.fixture
-def first_smhi_forecast2() -> SmhiForecast:
-    """Returns the smhi object."""
-    return smhi().get_forecast()[2]
+    return smhi.get_forecast()[2]
 
 
 @pytest.mark.asyncio
 async def test_provide_session_constructor() -> None:
     """Test the constructor that provides session."""
+    session = aiohttp.ClientSession()
     api = Smhi("1.1234567", "1.9876543",
-               session=aiohttp.ClientSession(),
+               session=session,
                api=FakeSmhiApi())
 
+    await session.close()
     assert api._api.session
-
 
 def test_max_six_digits_round() -> None:
     """Test the max six digits allowed."""
@@ -56,8 +60,7 @@ def test_max_six_digits_round() -> None:
 
 def test_nr_of_items(smhi_forecasts) -> None:
     """Tests the number of items returned matches the inputdata."""
-    assert len(smhi_forecasts) == 11
-
+    assert len(smhi_forecasts) == 12
 
 def test_temperature(first_smhi_forecast):
     '''test'''
@@ -69,7 +72,7 @@ def test_temperature_max(first_smhi_forecast):
 
 def test_temperature_min(first_smhi_forecast):
     '''test'''
-    assert first_smhi_forecast.temperature_min == 6
+    assert first_smhi_forecast.temperature_min == 7
 
 def test_humidity(first_smhi_forecast):
     '''test'''
@@ -98,8 +101,12 @@ def test_precipitation(first_smhi_forecast):
 
 def test_mean_precipitation(first_smhi_forecast):
     '''test'''
-    assert first_smhi_forecast.mean_precipitation == 0.00390625
+    assert first_smhi_forecast.mean_precipitation ==  0.08333333333333333
 
+
+def test_total_precipitation(first_smhi_forecast):
+    '''test'''
+    assert first_smhi_forecast.total_precipitation ==  2.0
 
 def test_wind_speed(first_smhi_forecast):
     '''test'''
@@ -168,24 +175,31 @@ async def test_smhi_async_integration_test_use_session():
     await api.session.close()
 
 @pytest.mark.asyncio
-async def test_smhi_async_get_forecast_integration():
+async def test_smhi_async_get_forecast_integration(smhi):
     '''test the async stuff'''
-    smhi_api = smhi()
-    forecast = await smhi_api.async_get_forecast()
+    forecast = await smhi.async_get_forecast()
     assert forecast[0] is not None
     assert forecast is not None
-
 
 @pytest.mark.asyncio
-async def test_smhi_async_get_forecast_integration_use_session():
+async def test_smhi_async_get_forecast_integration2(smhi_real):
     '''test the async stuff'''
-    smhi_api = smhi()
-    smhi_api.session = aiohttp.ClientSession()
-    forecast = await smhi_api.async_get_forecast()
+    forecast = await smhi_real.async_get_forecast()
+    assert forecast[0] is not None
+    assert forecast is not None
+    print(forecast[0].temperature)
+    print(forecast[1].temperature)
+
+@pytest.mark.asyncio
+async def test_smhi_async_get_forecast_integration_use_session(smhi):
+    '''test the async stuff'''
+    smhi.session = aiohttp.ClientSession()
+    forecast = await smhi.async_get_forecast()
 
     assert forecast[0] is not None
     assert forecast is not None
 
+    await smhi.session.close()
 
 @pytest.mark.asyncio
 async def test_async_use_abstract_base_class():
@@ -207,34 +221,54 @@ async def test_async_error_from_api():
     with pytest.raises(SmhiForecastException):
         await smhi_error.async_get_forecast()
 
+    
 
-def test_precipitation_mean_value():
-    """Test average precipitation calulation.
+# Might have to rewrite this test at some point
 
-    Average for the forecast is calculated the average
-    for the whole day.
-    """
-    fake_api = FakeSmhiApi()
-    fake_forecast = fake_api.get_forecast_api(' ', ' ')
-    total_mean_precipitation = -1.0
-    for forecast in fake_forecast['timeSeries']:
-        valid_time = datetime.strptime(forecast['validTime'], "%Y-%m-%dT%H:%M:%SZ")
-        if (valid_time.day == 8 and valid_time.hour > 0) or \
-           (valid_time.day == 9 and valid_time.hour == 0):
-            print(valid_time)
-            for param in forecast['parameters']:
-                if param['name'] == 'pmean':
-                    print(float(param['values'][0]))
-                    if total_mean_precipitation < 0:
-                        total_mean_precipitation = float(param['values'][0])
-                    else:
-                        total_mean_precipitation = (
-                            total_mean_precipitation + float(param['values'][0]))/2.0
+# def test_precipitation_mean_value(smhi):
+#     """Test average precipitation calulation.
 
-    api = smhi()
-    forecast = api.get_forecast()
-    assert forecast[8].mean_precipitation == total_mean_precipitation
+#     Average for the forecast is calculated the average
+#     for the whole day.
+#     """
+#     fake_api = FakeSmhiApi()
+#     fake_forecast = fake_api.get_forecast_api(' ', ' ')
+#     total_mean_precipitation = -1.0
+#     for forecast in fake_forecast['timeSeries']:
+#         valid_time = datetime.strptime(forecast['validTime'], "%Y-%m-%dT%H:%M:%SZ")
+#         if (valid_time.day == 8 and valid_time.hour > 0) or \
+#            (valid_time.day == 9 and valid_time.hour == 0):
+#             print(valid_time)
+#             for param in forecast['parameters']:
+#                 if param['name'] == 'pmean':
+#                     print(float(param['values'][0]))
+#                     if total_mean_precipitation < 0:
+#                         total_mean_precipitation = float(param['values'][0])
+#                     else:
+#                         total_mean_precipitation = (
+#                             total_mean_precipitation + float(param['values'][0]))/2.0
 
+#     forecast = smhi.get_forecast()
+#     assert forecast[8].mean_precipitation == total_mean_precipitation
+
+#
+#  Use this test for future debugs
+# 
+
+# @pytest.mark.asyncio
+# async def test_real_data(smhi_real):
+
+    
+#     forecast = await smhi_real.async_get_forecast()
+#     for f in forecast:
+#         logging.error("time: {}".format(f.valid_time))
+#         logging.error("temp_max: {}".format(f.temperature_max))
+#         logging.error("temp_min: {}".format(f.temperature_min))
+#         logging.error("totalPre: {}".format(f.total_precipitation))
+#         logging.error("meanPre: {}".format(f.mean_precipitation))
+#         logging.error("----")
+    
+#     assert True == False
 class FakeSmhiApi(SmhiAPIBase):
     '''Implements fake class to return API data'''
 

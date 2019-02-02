@@ -1,4 +1,3 @@
-import re
 import setuptools
 
 with open("README.md", "r") as fh:
@@ -6,10 +5,11 @@ with open("README.md", "r") as fh:
 
 setuptools.setup(
     name="smhi_pkg",
-    version="1.0.5",
+    version="1.0.6",
     author="helto4real",
     author_email="info@joysoftware.org",
-    description="Gets the weather forecast data from Swedish weather institute",
+    description="Gets the weather forecast data from Swedish "
+                "weather institute",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/helto4real/python-packages/smhi",
