@@ -269,7 +269,7 @@ def _get_forecast(api_result: dict) -> List[SmhiForecast]:
     day_nr = 1
 
     for day in forecasts_ordered:
-        forecasts_day: List[SmhiForecast] = forecasts_ordered[day]
+        forecasts_day = forecasts_ordered[day]
 
         if day_nr == 1:
             # Add the most recent forecast
@@ -290,7 +290,7 @@ def _get_forecast(api_result: dict) -> List[SmhiForecast]:
                 forecast = copy.deepcopy(forcast_day)
 
             total_precipitation = total_precipitation + \
-                forcast_day.mean_precipitation
+                forcast_day._total_precipitation
 
         if forecast is None:
             # We passed 12 noon, set to current

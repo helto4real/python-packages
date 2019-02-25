@@ -16,13 +16,13 @@ import logging
 @pytest.fixture
 def smhi() -> Smhi:
     """Returns the smhi object."""
-    return Smhi('17.041', '62.339', api=FakeSmhiApi())
+    return Smhi('17.041', '62.34198', api=FakeSmhiApi())
 
 @pytest.fixture
 def smhi_real() -> Smhi:
     """Returns the smhi object."""
-    return Smhi('17.661578', '59.514065')
-    #return Smhi('17.026864', '62.3400589')
+    #return Smhi('17.661578', '59.514065')
+    return Smhi('17.03078', '62.3398599') #Bällsta
     
 @pytest.fixture
 def smhi_forecasts(smhi) -> List[SmhiForecast]:
@@ -258,17 +258,19 @@ async def test_async_error_from_api():
 # @pytest.mark.asyncio
 # async def test_real_data(smhi_real):
 
-    
+#     w= open("C:\\temp\\forecast_total.txt","w+")    
 #     forecast = await smhi_real.async_get_forecast()
 #     for f in forecast:
-#         logging.error("time: {}".format(f.valid_time))
-#         logging.error("temp_max: {}".format(f.temperature_max))
-#         logging.error("temp_min: {}".format(f.temperature_min))
-#         logging.error("totalPre: {}".format(f.total_precipitation))
-#         logging.error("meanPre: {}".format(f.mean_precipitation))
-#         logging.error("----")
-    
+#         w.write("time: {}".format(f.valid_time)+"\r\n")
+#         w.write("temp_max: {}".format(f.temperature_max)+"\r\n")
+#         w.write("temp_min: {}".format(f.temperature_min)+"\r\n")
+#         w.write("totalPre: {}".format(f.total_precipitation)+"\r\n")
+#         w.write("meanPre: {}".format(f.mean_precipitation)+"\r\n")
+#         w.write("----")
+
+#     w.close()    
 #     assert True == False
+
 class FakeSmhiApi(SmhiAPIBase):
     '''Implements fake class to return API data'''
 
